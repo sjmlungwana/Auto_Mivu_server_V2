@@ -1,0 +1,7 @@
+{% if grains['roles'] == 'probe' %}
+roles:
+  - probe
+{% else %}
+roles:
+  - new
+{% endif %}

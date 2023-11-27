@@ -1,0 +1,128 @@
+scrape_configs:
+- job_name: prometheus
+  static_configs:
+  - targets:
+    - 127.0.0.1:9090
+
+{% for node in salt['pillar.get']('Nodes') %}
+{% set vpn_ip = salt['mine.get'](node.node, 'network.ip_addrs') %}
+{% if vpn_ip is defined and vpn_ip|length %}
+{% set prometheus_node_exporter = salt['pillar.get']('prometheus_node_exporter') %}
+{% if prometheus_node_exporter %}
+{% if prometheus_node_exporter.scrape_interval is defined and prometheus_node_exporter.scrape_interval %}
+  scrape_interval: {{ prometheus_node_exporter.scrape_interval }}
+{% endif %}
+{% if prometheus_node_exporter.scrape_timeout is defined and prometheus_node_exporter.scrape_timeout %}
+  scrape_timeout: {{ prometheus_node_exporter.scrape_timeout }}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+
+{% for node in salt['pillar.get']('Nodes') %}
+{% set vpn_ip = salt['mine.get'](node.node, 'network.ip_addrs') -%}
+{% if vpn_ip %}
+{% if node.snmp is defined and node.snmp %}
+{% for snmp in node.snmp %}
+{% if snmp.job_name is defined and snmp.job_name %}
+- job_name: {{ snmp.job_name }}
+{% else %}
+- job_name: {{ node.name }} (snmp{% if not loop.first%} {{ loop.index }}{% endif %})
+{% endif %}
+  metrics_path: /snmp
+  params:
+    module:
+    - {{ snmp.module }}
+{% if snmp.scrape_interval is defined and snmp.scrape_interval %}
+  scrape_interval: {{ snmp.scrape_interval }}s
+{% endif %}
+{% if snmp.scrape_timeout is defined and snmp.scrape_timeout %}
+  scrape_timeout: {{ snmp.scrape_timeout }}s
+{% endif %}
+  static_configs:
+  - targets:
+{% for value in snmp.targets %}
+    - {{ value }}
+{% endfor %}
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - target_label: __address__
+  {% if node != '0050560301b8' %}
+    replacement: {{ vpn_ip[node.node][0] }}:9116
+  {% else %}
+    replacement: 169.254.144.2:9116
+  {%endif%}
+{% endfor %}
+{% endif %}
+{% if node.nodes is defined and node.nodes %}
+{% for node in node.nodes %}
+{% if node.job_name is defined and node.job_name %}
+- job_name: {{ node.job_name }}
+{% else %}
+- job_name: {{ node.name }} (node{% if not loop.first%} {{ loop.index }}{% endif %})
+{% endif %}
+  metrics_path: /node
+  params:
+    module:
+    - {{ node.module }}
+{% if node.scrape_interval is defined and node.scrape_interval %}
+  scrape_interval: {{ node.scrape_interval }}s
+{% endif %}
+{% if node.scrape_timeout is defined and node.scrape_timeout %}
+  scrape_timeout: {{ node.scrape_timeout }}s
+{% endif %}
+  static_configs:
+  - targets:
+{% for value in node.targets %}
+    - {{ value }}
+{% endfor %}
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - target_label: __address__
+
+  {% if node != '0050560301b8' %}
+    replacement: {{ vpn_ip[node.node][0] }}:9115
+  {% else %}
+    replacement: 196.9.88.119:9100
+  {%endif%}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% set snmp = salt['pillar.get']('snmp') %}
+{% for snmp in snmp %}
+- job_name: {{ snmp.job_name }}
+  metrics_path: /snmp
+  params:
+    module:
+    - {{ snmp.module }}
+{% if snmp.scrape_interval is defined and snmp.scrape_interval %}
+  scrape_interval: {{ snmp.scrape_interval }}s
+{% endif %}
+{% if snmp.scrape_timeout is defined and snmp.scrape_timeout %}
+  scrape_timeout: {{ snmp.scrape_timeout }}s
+{% endif %}
+  static_configs:
+  - targets:
+{% for value in snmp.targets %}
+    - {{ value }}
+{% endfor %}
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - target_label: __address__
+  {% if node != '0050560301b8' %}
+    replacement: {{ node.host }}:9116
+  {% else %}
+    replacement: 169.254.144.2:9116
+  {%endif%}
+
+{% endfor %}

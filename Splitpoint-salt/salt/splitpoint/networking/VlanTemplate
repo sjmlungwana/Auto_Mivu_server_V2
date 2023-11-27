@@ -1,0 +1,19 @@
+{% set ip = [ip_addr][0] -%}
+[Match]
+Name={{rawdevice}}.{{vlanid}}
+
+[Network]
+DHCP=no
+Address={{ ip |join(',')}}
+
+
+{% if routes is defined and routes|length %}
+{% for routes in routes -%}
+
+[Route]
+Destination={{ routes.to }}
+Gateway={{ routes.via }}
+
+
+{% endfor %}
+{% endif %}

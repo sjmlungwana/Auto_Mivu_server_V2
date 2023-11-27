@@ -1,0 +1,11 @@
+[Unit]
+Description=prometheus snmp exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/snmp_exporter --web.listen-address="{{ grains['ip_interfaces']['tun0'][0] }}:9116" --config.file /etc/snmp_exporter/snmp.yml
+Restart=always
+RestartSec=3
+[Install]
+WantedBy=multi-user.target

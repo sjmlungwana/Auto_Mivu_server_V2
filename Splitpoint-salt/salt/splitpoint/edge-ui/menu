@@ -1,0 +1,578 @@
+#!/bin/bash
+
+#Menu version 1.1 rev 20201120.1
+clear
+
+
+
+if test -f /etc/menu.conf; then
+source /etc/menu.conf
+else 
+echo $MSG_NO_CFG
+exit
+fi
+
+
+if ! dialog --clear; then 
+clear
+echo -----------------------------------ERROR-------------------------------------------
+echo "You must install dialog program (sudo apt install dialog) then run menu"
+echo -----------------------------------------------------------------------------------
+echo
+exit 
+fi
+
+INTER_OK=0
+for interf in $(ls /sys/class/net/); do
+if test  "$interf" == "$INTERFACE"; then
+INTER_OK=1
+fi
+done
+
+if test $INTER_OK -eq 0; then
+clear 
+echo -----------------------------------ERROR-------------------------------------------
+echo Interface $INTERFACE defined in menu.conf is not present on the server
+echo -----------------------------------------------------------------------------------
+exit
+fi
+
+
+
+trap ctrl_c 1 2 3 15 20
+trap "" SIGTSTP
+
+function ctrl_c() {
+ 	dialog --backtitle "$BACK_TITLE " --title "ALERT!" --colors --msgbox  "\Z1 $MSG_CTRLC" 6 40 
+	if test "$?" == "0";then
+	return
+		fi
+}
+
+imput_cdir_ip () {
+dialog --backtitle "$BACK_TITLE " --title "Insert IP: $MASTER" --inputbox "$MSG_STATIC_ADD"  0 0 2>/tmp/menu.sh.$$
+
+
+if test "$?" == "0" ; then
+	
+	IP=$(cat /tmp/menu.sh.$$)
+	
+	if valid_ip_cidr $IP; then
+	RES=0
+	else 
+	dialog --backtitle "$BACK_TITLE " --title "ERROR" --colors --msgbox  "\Z1 $MSG_INVALID_IP_F \Zn" 6 60
+	RES=1
+fi
+elif test "$?" == "255"; then
+RES=255
+else
+RES=2
+fi
+}
+
+add_dg () {
+dialog --backtitle "$BACK_TITLE " --title "Gateway" --inputbox "\n $MSG_DG \n"  7 50 2>/tmp/menu.sh.$$
+if test "$?" == "0" ; then
+	DG=$(cat /tmp/menu.sh.$$)
+	if valid_ip $DG; then
+	RES=0
+NEWDG=$DG
+	else
+	dialog --backtitle "$BACK_TITLE " --title "ERROR" --colors --msgbox  "\Z1 $MSG_INVALID_IP_F \Zn" 6 60
+	RES=1
+fi
+elif test "$?" == "255"; then
+RES=255
+else
+RES=2
+fi
+}
+
+add_dns () {
+dialog --backtitle "$BACK_TITLE " --title "DNS" --inputbox "$MSG_DNS"  7 55 2>/tmp/menu.sh.$$
+if test "$?" == "0" ; then
+        DNS=$(cat /tmp/menu.sh.$$)
+IFS=','
+
+for ddns in $DNS; do
+        if valid_ip $ddns; then
+        RES=0
+NEWDNS=$DNS
+        else
+        dialog --backtitle "$BACK_TITLE " --title "ERROR" --colors --msgbox  "\Z1 $MSG_INVALID_IP_F $dns\Zn" 6 60
+        RES=1
+fi
+done
+
+elif test "$?" == "255"; then
+RES=255
+else
+RES=2
+fi
+}
+
+ip_apply () {
+	dialog --backtitle "$BACK_TITLE " --title "Please Confirm IP Data" --colors --yesno "Interface: \Z1$INTERFACE\Zn \n\nNew IP: $NEWIP \nDefault Gateway: $NEWDG \nDns: $NEWDNS \n "  0 0 2>/tmp/menu.sh.$$
+if test "$?" == "0" ; then
+        RES=$(cat /tmp/menu.sh.$$)
+       
+
+sudo bash -c "cat << EOF > $1 
+
+# This file describes the network interfaces available on your system
+# and how to activate them. For more information, see interfaces(5).
+
+# The loopback network interface
+auto lo
+iface lo inet loopback
+
+# The primary network interface
+
+[Match]
+Name=$INTERFACE
+
+[Network]
+Address=$NEWIP/$NEWMASK
+Gateway=$NEWDG
+DNS=$NEWDNS
+
+
+EOF"
+
+read
+if test "$TEST" == "y" ;then
+	ifo "Stoping Interface...."
+	if echo sudo systemctl restart systemd-networkd 2>/dev/null; then
+		ifo "Interface $ifaces Stoped"
+	if echo sudo  systemctl restart systemd-networkd 2>/dev/null; then
+		ifo "$faces Started"
+	else
+		dialog --backtitle "$BACK_TITLE " --colors --title "ERROR" --msgbox  "\Z1 Imposible to start $ifaces \Zn" 6 60
+	fi
+else
+	dialog --backtitle "$BACK_TITLE "  --colors--title "ERROR" --msgbox  "\Z1 Imposible to stop $ifaces \Zn" 6 60
+fi
+else
+	ifo "Stoping Interface...."
+        if  sudo systemctl restart systemd-networkd; then
+                ifo "$faces Restarted"
+        else
+                dialog --backtitle "$BACK_TITLE " --colors --title "ERROR" --msgbox  "\Z1 Imposible to start $ifaces \Zn" 6 60
+        fi
+
+fi
+		
+
+#	if valid_ip $DNS; then
+#        RES=0
+#NEWDNS=$DNS
+#        else
+#        dialog --backtitle "$BACK_TITLE " --title "ERROR" --colors --msgbox  "\Z1 $MSG_INVALID_IP_F \Zn" 6 60
+#        RES=1
+#fi
+
+elif test "$?" == "255"; then
+RES=255
+else
+RES=2
+fi
+}
+
+assign_dhcp () {
+sudo bash -c  "cat << EOF > $1 
+# THIS FILE WAS MADE BY MENU
+# This file describes the network interfaces available on your system
+# and how to activate them. For more information, see interfaces(5).
+
+[Match]
+Name=$INTERFACE
+
+[Network]
+DHCP=yes
+
+EOF"
+
+if test "$?" == "0"; then
+if test "$TEST" == "y" ;then
+	ifo "Stoping Interface...."
+	if echo sudo systemctl restart systemd-networkd 2>/dev/null; then
+		ifo "Interface $ifaces Stoped"
+	if echo sudo systemctl restart systemd-networkd 2>/dev/null; then
+		ifo "$faces Started"
+	else
+		dialog --backtitle "$BACK_TITLE " --colors --title "ERROR" --msgbox  "\Z1 Imposible to start $ifaces \Zn" 6 60
+	fi
+else
+	dialog --backtitle "$BACK_TITLE "  --colors--title "ERROR" --msgbox  "\Z1 Imposible to stop $ifaces \Zn" 6 60
+fi
+else
+	ifo "Stoping Interface...."
+        if  sudo systemctl restart systemd-networkd; then
+                ifo "$faces Restarted"
+        else
+                dialog --backtitle "$BACK_TITLE " --colors --title "ERROR" --msgbox  "\Z1 Imposible to start $ifaces \Zn" 6 60
+        fi
+
+fi
+
+else 
+return 1
+fi
+
+}
+	
+cdr2mask ()
+{
+   # Number of args to shift, 255..255, first non-255 byte, zeroes
+   set -- $(( 5 - ($1 / 8) )) 255 255 255 255 $(( (255 << (8 - ($1 % 8))) & 255 )) 0 0 0
+   [ $1 -gt 1 ] && shift $1 || shift
+   echo ${1-0}.${2-0}.${3-0}.${4-0}
+}
+
+
+change_ip () {
+	
+	dialog --title "$MSG_IP_TYPE"  --radiolist "$MSG_IP_TYPE" 9 50 2 "DHCP" "Set Dinamic IP on $INTERFACE" ON "STATIC" "Set Fixed IP on $INTERFACE" OFF  2>/tmp/menu.sh.$$
+	if test "$?" == "0"; then
+	if test $(cat /tmp/menu.sh.$$) == "STATIC"; then
+	local RES=1	
+		while test "$RES" != "0" ; do
+		imput_cdir_ip
+		if test "$RES" == "0" ; then
+		dialog --backtitle "$BACK_TITLE " --yesno "$MSG_CON_IP $IP?" 6 30
+			if test "$?" == "0"; then
+				add_dg
+				if test "$RES" == "0"; then
+				dialog --backtitle "$BACK_TITLE " --yesno "$MSG_CON_DG $DG" 7 30
+					if test "$?" == "0"; then
+						add_dns
+						if test "$RES" == "0"; then
+						dialog --backtitle "$BACK_TITLE " --yesno "$MSG_CON_DNS $DNS" 6 40	
+							if test "$?" == "0"; then
+							ip_apply $IP_FILE
+							break
+							fi
+						fi
+					else 
+					RES=1
+					fi
+				fi
+			else 
+			RES=1
+			fi
+		elif test "$RES" == "2" || test "$RES" == "255" ; then
+		break
+		fi
+		done
+	elif test $(cat /tmp/menu.sh.$$) == "DHCP"; then
+	dialog --backtitle "$BACK_TITLE " --yesno "$MSG_DHCP_YN $INTERFACE?" 6 30
+		if test "$?" == "0"; then
+		assign_dhcp $IP_FILE
+			if test "$?" == "0"; then
+			dialog --backtitle "$BACK_TITLE " --title "OK" --colors --msgbox  "$DHCP_SUCC_ASSIG $INTERFACE" 6 60
+			else
+			dialog --backtitle "$BACK_TITLE " --title "ERROR" --colors --msgbox  "\Z1 $MSG_NO_DHCP \Zn" 6 60
+			fi
+		fi
+	fi
+fi	
+}
+
+
+
+ifo () {
+	 dialog --backtitle "$BACK_TITLE " --colors --infobox "$1" 4 30
+}
+
+valid_ip_cidr () {
+local  cidr=$1
+ip=$(echo $1 | cut -d'/' -f1)
+net=$(echo $1 | cut -d'/' -f2)
+local  stat=1
+
+if echo $net | grep -e  '^1[0-9]$\|^2[0-9]$\|^3[0-2]$' ;then
+
+if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+    OIFS=$IFS
+    IFS='.'
+    ip=($ip)
+    IFS=$OIFS
+    [[ ${ip[0]} -le 255 && ${ip[1]} -le 255 \
+        && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+    stat=0
+
+NEWIP=$(echo $1 | cut -d'/' -f1)
+NEWMASK=$(echo $net)
+else
+stat=1
+fi
+
+else
+	stat=2
+
+fi
+return $stat
+}
+
+
+valid_ip () {
+local  ip=$1
+local  stat=1
+
+if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+    OIFS=$IFS
+    IFS='.'
+    ip=($ip)
+    IFS=$OIFS
+    [[ ${ip[0]} -le 255 && ${ip[1]} -le 255 \
+        && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+    stat=$?
+fi
+return $stat
+}
+
+
+
+
+restart_minion () {
+
+
+	ifo "$MSG_STP_MIN"	
+	sleep 1
+	if sudo systemctl stop salt-minion; then
+	sleep 1
+	ifo "$MSG_STPD_MIN"
+	else
+	ifo "$MSG_ERR_STP_MIN"
+	read
+fi
+	ifo "$MSG_DLT_CERT" 
+	sleep 1
+	if sudo rm $MINIONPEM; then
+		if sudo rm $MINIONPUB; then
+			ifo "$MSG_CERT_DLTD"
+			sleep 1
+		else
+			ifo "$MSG_ERR_DLT_CERT"
+			read
+		fi
+	else
+		ifo "$MSG_ERR_DLT_CERT"
+		read
+fi
+	ifo "$MSG_CLR_MIN_ID"
+	sleep 1
+	if sudo cat /dev/null > $MINIONID; then
+		ifo "$MSG_ID_DLTD"
+		sleep 1
+	else
+		ifo "$MSG_ERR_DLTD_ID"
+		read
+fi
+	ifo "$MSG_EN_SALT"
+	sleep 1
+	if sudo systemctl enable salt-minion 2>/dev/null 1>/dev/null; then
+		echo "$MSG_SALT_EN"
+		sleep 1
+	else
+		ifo "$MSG_ERR_EN_SALT"
+		read
+fi
+	ifo "$MSG_RES_SALT"
+	sleep 1
+	if sudo systemctl start salt-minion; then
+		ifo "$MSG_SALT_RES"
+		sleep 1
+	else
+		ifo "$MSG_ERR_RES_SALT"
+		read
+fi
+
+}
+
+change_minion_ip () {
+	if test "$1" == "salt_ch_ip"; then
+	MASTER=$(cat $MINIONFILE | grep "master:" | cut -d' ' -f2)
+	MASTERIP=$(dialog --backtitle "$BACK_TITLE " --title "Actual IP: $MASTER" --inputbox "New IP"  0 0 2>&1 >/dev/tty)
+
+	if valid_ip $MASTERIP; then
+
+	if sudo sed -i -e "s/master:.*/master: $MASTERIP/" $MINIONFILE; then
+		ifo "$MSG_IP_ASIG $MASTERIP"
+		sudo restart_minion
+	else
+		ifo "$MSG_ERR_ASIG_IP"
+		read
+		return
+	fi
+else
+	ifo "\Z1 $MSG_ERR_IP_INV"
+	read
+fi
+	else
+	sudo restart_minion
+fi
+
+}
+
+check_port () {
+	if nc -zvw30 $1 $2 2>/dev/null 1>/dev/null;
+	then
+		echo -e -n '\Z2' $2 '\Zn'
+		#echo -e -n  '\033[0;32m'$2'\033[0m '
+	else
+		echo -e -n '\Z1' $2 '\Zn'
+		#echo -e -n '\033[0;31m'$2'\033[0m '
+	fi
+
+}
+
+health () {
+
+echo ----------------------------------NETWORKING-----------------------------------------
+IFS=$'\n'
+for ifaces in $(ls /sys/class/net/) 
+	do 
+		if [ "$ifaces" == "$INTERFACE" ] ; then
+		echo $ifaces > /tmp/interface.tmp.$$
+		echo -n "Interface $ifaces IP: " 
+		echo  $(ip a s $ifaces | grep -m1 "inet "| sed -e 's/  */ /g' | cut -d" "  -f3)
+		echo DEFAULT GATEWAY: $(route -n| grep -e '^0.0.0.0' | sed -e 's/  */ /g'| cut -d' ' -f2)
+		echo  " Node ID:  \Z2$(ifconfig $ifaces| grep -e '\<HWaddr\>'|sed -e 's/  */ /g'| cut -d' ' -f5) \Zn"
+		echo -n " Current IP Settings: $(grep "iface $ifaces inet" /etc/network/interfaces| cut -d" " -f4)"
+		echo 'Control Server & Port Accessibility:  '
+		echo
+		echo 'Master IP:' $(cat $MINIONFILE | grep "master:" | cut -d' ' -f2)
+		echo
+		echo -n 'Master Ports:'
+		for port in "${PORTSCHECK[@]}"
+		do
+		check_port $(cat $MINIONFILE | grep "master:" | cut -d' ' -f2) $port
+		#check_port $(ifconfig $ifaces | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')  $port
+		done
+		echo 
+	fi
+	done
+	echo 
+	echo --------------------------------DEVICE HEALTH---------------------------------------
+	uptime
+	echo ------------------------------------------------------------------------------------
+	total=$(free -h| grep Mem:|sed -e 's/  */ /g'|cut -d" " -f2)
+	used=$(free -h| grep Mem:|sed -e 's/  */ /g'|cut -d" " -f3)
+	free=$(free -h| grep Mem:|sed -e 's/  */ /g'|cut -d" " -f7)
+	echo "Memory - Total: $total  Used: $used  Free: \Z2$free\Zn"
+	echo ------------------------------------------------------------------------------------
+	df -h .
+	echo ------------------------------------------------------------------------------------
+	echo
+	echo                                                                                                                                                                                                                               
+	echo "              Reloading every $PORTSTATDEALY \Z1 Press Ctrl+c to exit to main menu"
+	
+}
+
+reboot_system () {
+	exec 3>&1;
+	result=$(dialog --backtitle "$BACK_TITLE " --insecure --passwordbox "Reboot Password" 0 0 2>&1 1>&3);
+	exitcode=$?;
+	exec 3>&-;
+      	if test "$result" == "$REBOOTPW"; then
+		dialog --backtitle "$BACK_TITLE " --yesno "$MSG_CONF_REBOOT" 0 0 
+		if test "$?" == "0"; then
+			dialog --backtitle "$BACK_TITLE " --infobox "$MSG_REBOOT" 0 0 
+			sleep 1
+			sudo reboot
+		fi
+	else
+		dialog --backtitle "$BACK_TITLE " --colors --title "ERROR" --msgbox  "\Z1 $MSG_ACC_REBOOT" 5 35
+	fi
+		
+}
+
+
+terminal_access () { 
+	exec 3>&1;
+        result=$(dialog --backtitle "$BACK_TITLE " --insecure --passwordbox "$MSG_TERM_PASS sps" 0 38 2>&1 1>&3);
+        exitcode=$?;
+        exec 3>&-;
+	 if [[ "${ADMINUSERS[@]}" =~ "$USER" ]]; then
+        if test "$result" == "$TERMPW"; then
+                dialog --backtitle "$BACK_TITLE " --yesno "$MSG_CONF_EXIT" 0 0
+                if test "$?" == "0"; then
+			exec /bin/bash
+
+                fi
+        else
+                dialog --backtitle "$BACK_TITLE " --colors --title "ERROR" --msgbox  "\Z1 $MSG_BAD_PW" 5 25
+        fi
+	else
+		dialog --backtitle "$BACK_TITLE " --colors --title "ERROR" --msgbox  "\Z1 $USER $MSG_NOT_ACCESS" 5 40
+
+fi
+}
+
+
+
+control_c () {
+#kill -SIGINT $(</tmp/menu.sleep.pid)
+pkill -P $(</tmp/menu.sleep.pid.$$) sleep
+EXIT_STS=y
+}
+
+trap control_c SIGINT
+
+show_stat () {
+trap control_c SIGINT
+while test "$EXIT_STS" != "y" ;do
+                dialog --backtitle "$BACK_TITLE " --title "STATS"  --colors --infobox "$(health)" 0 0
+                INTERFACE=$(cat /tmp/interface.tmp.$$)
+                echo $$ > /tmp/menu.sleep.pid.$$
+                sleep $PORTSTATDEALY
+                done
+                EXIT_STS=n
+                trap ctrl_c 1 2 3 15 20
+
+}
+
+
+show_stat
+
+#dialog --backtitle "$BACK_TITLE " --colors --msgbox "$(health)" 0 0 
+INTERFACE=$(cat /tmp/interface.tmp.$$)
+
+while true
+do
+
+SEL=$(dialog --nocancel --backtitle "$BACK_TITLE " --menu   "$MSG_MAIN_MENU"  0 0 0  \
+	1 "$MSG_SHOW_STS" \
+	2 "$MSG_CHG_SALT" \
+	3 "$MSG_RESTART_SALT" \
+	4 "$MSG_CHG_IP" \
+	5 "$MSG_REBOOT_SYS" \
+	6 "$MSG_SSH" \
+	7 "$MSG_EXIT" \
+	2>&1 >/dev/tty)
+clear
+
+case $SEL in
+	1) show_stat 
+		;;
+	2) change_minion_ip salt_ch_ip
+		;;
+	3) change_minion_ip
+		;;
+	4) change_ip
+		;;
+	5) reboot_system
+		;;
+	6) terminal_access
+		;;
+	7) exit
+		;;
+	255) 
+		;;
+	*) #dialog --colors --msgbox "ERROR" 0 0 
+		;;
+esac
+
+done
+

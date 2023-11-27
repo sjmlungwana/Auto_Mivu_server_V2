@@ -1,0 +1,22 @@
+#! /bin/bash
+{% set importanthosts = salt['grains.get']('importanthosts') %}
+{% set vpn = salt['grains.get']('vpn') %}
+{% set dns = salt['grains.get']('dns') %}
+{% set name = salt['grains.get']('name') %}
+{% set client = salt['grains.get']('client') %}
+
+REGEX="^\s+(?<number>[^\s]{1,3})\.\|--\s(?<dest_ip>[^\s]+)\s+(?<loss>[^%\s]+)%*\s+(?<sent>[^\s]+)\s+(?<drop>[^\s]+)\s+(?<last>[^\s\.]+).*?\s+(?<best>[^\s\.]+).*?\s+(?<avg>[^\s\.]+).*?\s+(?<wrst>[^\s\.]+).*?\s+(?<stdev>[^\s\.]+).*?\s+(?<gmean>[^\s\.]+).*?\s+(?<jttr>[^\s\.]+).*?\s+(?<javg>[^\s\.]+).*?\s+(?<jmax>[^\s\.]+).*?\s+(?<jint>[^\s\.]+).*?$" 
+
+{% for host in importanthosts %}
+{% if host.dest is defined and host.dest|length %}
+{% if host.proto is defined and host.proto|length %}
+{% if host.proto == 'tcp' and host.port|length %}
+INFLUX='mtr,destAddr={{ host.dest }},destinationPort={{ host.port }},destinationAddress=$+{dest_ip},{% if host.name is defined and host.name|length %}destinationName=$+{host.name},{%endif%}hopNumber=$+{number} packetLossPercentage=$+{loss},lastPacketLatency=$+{last}i,allPacketsAverageLatency=$+{avg}i,averageJitter=$+{javg}i' 
+mtr --tcp -P {{ host.port }} --no-dns --order "LSDNBAWVGJMXI" --report-wide -c 1  {{ host.dest }}) | tr '?' 'X' | grep -v "^HOST:" | grep -v "^Start:" | perl -e "while(<>) { s/${REGEX}/${INFLUX}/; print; }" &
+{% endif %}
+{% endif %}
+INFLUX='mtr,destAddr={{ host.dest }},destinationAddress=$+{dest_ip},{% if host.name is defined and host.name|length %}destinationName=$+{host.name},{%endif%}hopNumber=$+{number} packetLossPercentage=$+{loss},lastPacketLatency=$+{last}i,allPacketsAverageLatency=$+{avg}i,averageJitter=$+{javg}i' 
+mtr --no-dns --order "LSDNBAWVGJMXI" --report-wide -c 1 {{ host.dest }} | tr '?' 'X' | grep -v "^HOST:" | grep -v "^Start:" | perl -e "while(<>) { s/${REGEX}/${INFLUX}/; print; }" &
+{% endif %}
+sleep 2
+{% endfor %}

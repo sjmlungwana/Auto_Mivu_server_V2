@@ -1,0 +1,18 @@
+{% set tstat = salt['grains.get']('tstat:interface') %}
+[Unit]
+Description=Splitpoint Filebeat sends tstat tcp none complete log files to Logstash.
+Documentation=https://www.elastic.co/products/beats/filebeat
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+
+Environment="BEAT_LOG_OPTS="
+Environment="BEAT_CONFIG_OPTS=-c /etc/filebeat/filebeatTcpNoneComplete{{tstat}}.yml"
+Environment="BEAT_PATH_OPTS=--path.home /usr/share/filebeat --path.config /etc/filebeat --path.data /var/lib/filebeat/tcp_none_complete"
+ExecStart=/usr/share/filebeat/bin/filebeat $BEAT_LOG_OPTS $BEAT_CONFIG_OPTS $BEAT_PATH_OPTS
+Restart=always
+ExecStartPre=-/usr/bin/touch /opt/splitpoint/tstat/var/eth0/.tcp_none_complete_eth0-marker
+
+[Install]
+WantedBy=multi-user.target

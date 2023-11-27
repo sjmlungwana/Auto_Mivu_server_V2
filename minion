@@ -1,0 +1,6 @@
+grains:
+  roles:
+  - server
+master_port: 44506
+#telegram.chat_id: '-1001490458973'
+#telegram.token: '1003279909:AAGaxe-298oQzexs3i-IdlrA8gy0KizTdPo'

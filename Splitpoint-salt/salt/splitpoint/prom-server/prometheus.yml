@@ -1,0 +1,520 @@
+remote_write:
+  - url: "http://100.103.2.4:8086/api/v1/prom/write?db=prometheus"
+#  - url: "http://localhost:8086/api/v1/prom/write?db=prometheus"
+remote_read:
+  - url: "http://100.103.2.4:8086/api/v1/prom/read?db=prometheus"
+#  - url: "http://localhost:8086/api/v1/prom/read?db=prometheus"
+global:
+  evaluation_interval: 15s
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets:
+       - localhost:9093
+rule_files:
+   - "*_rules.yml"
+scrape_configs:
+- job_name: prometheus
+  static_configs:
+  - targets:
+    - 127.0.0.1:9090
+- job_name: prometheus_alert
+  static_configs:
+  - targets:
+    - 127.0.0.1:9093
+
+
+- job_name: xneelo api
+  metrics_path: /metrics
+  static_configs:
+  - targets:
+    - 169.254.144.2:9120
+  relabel_configs:
+  - source_labels: [site_client,site_code]
+    regex: (.*);(.*)
+    replacement: '${1}${2}'
+    target_label: site_code
+  metric_relabel_configs:
+  - source_labels: [name]
+    target_label: device_name
+    action: replace
+  - source_labels: [ __name__ ]
+    target_label: __name__
+    action: replace
+    replacement: probe_success
+  - regex: '(url)'
+    action: labeldrop
+
+
+
+
+
+##Rules Start##
+{% set vpn_ip = salt['mine.get']('*', 'network.ip_addrs')  or {} %}
+{% for site in salt['pillar.get']('Nodes') %}
+##Hearbeat Rules##
+{% if vpn_ip.get(site.node, []) %}
+{% set probes = salt['pillar.get']('probes') %}
+- job_name: {{ site.name }} heartbeat
+  metrics_path: /probe
+  params:
+    module:
+    - icmp
+  static_configs:
+  - targets:
+{% set vpnip = vpn_ip[site.node][0] %}
+    - {{ vpnip }}
+    labels:
+      device: 'mivu'
+{% if site.site_name is defined and site.site_name %}
+      site_name: '{{ site.site_name }}'
+      site_code: '{{ site.site_code }}'
+      site_ctry: '{{ site.site_ctry }}'
+      site_rgn: '{{ site.site_rgn }}'
+      site_desc: '{{ site.site_desc }}'
+      site_client: '{{ site.site_client }}'
+{% if site.site_div is defined and site.site_div %}
+      site_div: '{{ site.site_div }}'
+{% endif %}
+{% if site.mm is defined and site.mm == 'true' %}
+      maintenance_mode: 'true'
+{% else %}
+      maintenance_mode: 'false'
+{% endif %}
+{% if site.geohash is defined and site.geohash %}
+      geohash: '{{ site.geohash }}'
+{% endif %}
+{% endif %}
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - target_label: __address__
+    replacement: 169.254.144.1:9115
+{% if site.site_name is defined and site.site_name %}
+  - source_labels: [site_ctry,site_rgn,site_desc,site_client,site_code]
+    regex: (.*);(.*);(.*);(.*);(.*)
+    replacement: 'M4${1}MP${2}{% if site.site_div is defined and site.site_div %}-{{ site.site_div }}{% endif %}-${3}-${4}${5}'
+    target_label: device_name
+  - source_labels: [site_ctry,site_rgn,site_desc,site_client,site_code]
+    regex: (.*);(.*);(.*);(.*);(.*)
+    replacement: 'G4${1}CE${2}{% if site.site_div is defined and site.site_div %}-{{ site.site_div }}{% endif %}-${3}-${4}${5}'
+    target_label: device_ce  
+  - source_labels: [site_client,site_code]
+    regex: (.*);(.*)
+    replacement: '${1}${2}'
+    target_label: site_code 
+    {% endif %}
+###
+
+
+
+{% if site.api is defined and site.api %}
+- job_name: {{ site.name }} api
+  metrics_path: /metrics
+  static_configs:
+  - targets:
+{% set vpnip = vpn_ip[site.node][0] %}
+    - {{ vpnip }}:9126
+    labels:
+{% if site.site_name is defined and site.site_name %}
+      site_name: '{{ site.site_name }}'
+      site_code: '{{ site.site_code }}'
+      site_ctry: '{{ site.site_ctry }}'
+      site_rgn: '{{ site.site_rgn }}'
+      site_desc: '{{ site.site_desc }}'
+      site_client: '{{ site.site_client }}'
+{% if site.site_div is defined and site.site_div %}
+      site_div: '{{ site.site_div }}'
+{% endif %}
+{% if site.mm is defined and site.mm == 'true' %}
+      maintenance_mode: 'true'
+{% else %}
+      maintenance_mode: 'false'
+{% endif %}
+{% if site.geohash is defined and site.geohash %}
+      geohash: '{{ site.geohash }}'
+{% endif %}
+{% endif %}
+  relabel_configs:
+  - source_labels: [site_ctry,site_rgn,site_desc,site_client,site_code]
+    regex: (.*);(.*);(.*);(.*);(.*)
+    replacement: 'G4${1}CE${2}{% if site.site_div is defined and site.site_div %}-{{ site.site_div }}{% endif %}-${3}-${4}${5}'
+    target_label: device_ce  
+  - source_labels: [site_client,site_code]
+    regex: (.*);(.*)
+    replacement: '${1}${2}'
+    target_label: site_code 
+  metric_relabel_configs:
+  - source_labels: [name]
+    target_label: device_name
+    action: replace
+  - source_labels: [ __name__ ]
+    target_label: __name__
+    action: replace
+    replacement: probe_success
+  - regex: '(url)'
+    action: labeldrop 
+{% endif %}
+
+
+###
+##SNMP RULES##
+{% if site.snmp is defined and site.snmp %}
+{% for snmp in site.snmp %}
+{% if snmp.job_name is defined and snmp.job_name %}
+- job_name: {{ snmp.job_name }}
+{% else %}
+- job_name: {{ site.name }} (snmp{% if not loop.first%} {{ loop.index }}{% endif %})
+{% endif %}
+  metrics_path: /snmp
+  params:
+    module:
+    - {{ snmp.module }}
+{% if snmp.scrape_interval is defined and snmp.scrape_interval %}
+  scrape_interval: {{ snmp.scrape_interval }}s
+{% endif %}
+{% if snmp.scrape_timeout is defined and snmp.scrape_timeout %}
+  scrape_timeout: {{ snmp.scrape_timeout }}s
+{% endif %}
+  static_configs:
+  - targets:
+{% for value in snmp.targets %}
+    - {{ value }}
+{% endfor %}
+    labels:
+      device: 'snmp'
+{% if site.site_name is defined and site.site_name %}
+      site_name: '{{ site.site_name }}'
+      site_code: '{{ site.site_code }}'
+      site_ctry: '{{ site.site_ctry }}'
+      site_rgn: '{{ site.site_rgn }}'
+      site_desc: '{{ site.site_desc }}'
+      site_client: '{{ site.site_client }}'
+{% if site.site_div is defined and site.site_div %}
+      site_div: '{{ site.site_div }}'
+{% endif %}
+{% if site.mm is defined and site.mm == 'true' %}
+      maintenance_mode: 'true'
+{% else %}
+      maintenance_mode: 'false'
+{% endif %}
+{% endif %}
+  {% set vpnip = vpn_ip[site.node][0] %}
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - target_label: __address__
+    replacement: {{ vpnip }}:9116
+  - source_labels: [site_ctry,site_rgn,site_desc,site_client,site_code]
+    regex: (.*);(.*);(.*);(.*);(.*)
+    replacement: 'M4${1}MP${2}{% if site.site_div is defined and site.site_div %}-{{ site.site_div }}{% endif %}-${3}-${4}${5}'
+    target_label: device_name  
+  - source_labels: [site_ctry,site_rgn,site_desc,site_client,site_code]
+    regex: (.*);(.*);(.*);(.*);(.*)
+    replacement: 'G4${1}CE${2}{% if site.site_div is defined and site.site_div %}-{{ site.site_div }}{% endif %}-${3}-${4}${5}'
+    target_label: device_ce  
+  - source_labels: [site_client,site_code]
+    regex: (.*);(.*)
+    replacement: '${1}${2}'
+    target_label: site_code 
+  - source_labels: [fgVpnTunEntIndex]
+    regex: (.*)
+    replacement: '${1}'
+    target_label: tunnel
+{% endfor %}
+{% endif %}
+
+###SITE PROBE RULES###
+
+{% if site.probes is defined and site.probes %}
+{% for probe in site.probes %}
+{% if probe.job_name is defined and probe.job_name %}
+- job_name: {{ probe.job_name }}
+{% else %}
+- job_name: {{ site.name }} (probe{% if not loop.first%} {{ loop.index }}{% endif %})
+{% endif %}
+  metrics_path: /probe
+  params:
+    module:
+    - {{ probe.module }}
+{% if probe.scrape_interval is defined and probe.scrape_interval %}
+  scrape_interval: {{ probe.scrape_interval }}s
+{% endif %}
+{% if probe.scrape_timeout is defined and probe.scrape_timeout %}
+  scrape_timeout: {{ probe.scrape_timeout }}s
+{% endif %}
+  static_configs:
+  - targets:
+{% for value in probe.targets or []: %}
+    - {{ value }}
+{% endfor %}
+
+
+
+{% if site.site_name is defined and site.site_name %}  
+    labels:
+{% if site.device is defined and site.device == 'core' %}
+      device: 'core'
+{% else %}
+      device: 'sm'
+{% endif %}
+      site_name: '{{ site.site_name }}'
+      site_code: '{{ site.site_code }}'
+      site_ctry: '{{ site.site_ctry }}'
+      site_rgn: '{{ site.site_rgn }}'
+      site_desc: '{{ site.site_desc }}'
+      site_client: '{{ site.site_client }}'
+{% if site.site_div is defined and site.site_div %}
+      site_div: '{{ site.site_div }}'
+{% endif %}
+{% if site.mm is defined and site.mm == 'true' %}
+      maintenance_mode: 'true'
+{% else %}
+      maintenance_mode: 'false'
+{% endif %}
+{% if probe.geohash is defined and probe.geohash %}
+      geohash: '{{ site.geohash }}'
+{% endif %} 
+  {% set vpnip = vpn_ip[site.node][0] %}
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - target_label: __address__
+    replacement: {{ vpnip }}:9115
+  - source_labels: [site_ctry,site_rgn,site_desc,site_client,site_code]
+    regex: (.*);(.*);(.*);(.*);(.*)
+    replacement: 'M4${1}MP${2}{% if site.site_div is defined and site.site_div %}-{{ site.site_div }}{% endif %}-${3}-${4}${5}'
+    target_label: device_name 
+  - source_labels: [site_ctry,site_rgn,site_desc,site_client,site_code]
+    regex: (.*);(.*);(.*);(.*);(.*)
+    replacement: 'G4${1}CE${2}{% if site.site_div is defined and site.site_div %}-{{ site.site_div }}{% endif %}-${3}-${4}${5}'
+    target_label: device_ce 
+  - source_labels: [site_client,site_code]
+    regex: (.*);(.*)
+    replacement: '${1}${2}'
+    target_label: site_code  
+{% else %} 
+
+
+{% if probe.site_name is defined and probe.site_name %}
+    labels:
+{% if site.device is defined and site.device == 'core' %}
+      device: '{{site.device}}'
+{% else %}
+      device: 'sm'
+{% endif %}
+      site_name: '{{ probe.site_name }}'
+      site_code: '{{ probe.site_code }}'
+      site_ctry: '{{ probe.site_ctry }}'
+      site_rgn: '{{ probe.site_rgn }}'
+      site_desc: '{{ probe.site_desc }}'
+      site_client: '{{ probe.site_client }}'
+{% if site.site_div is defined and site.site_div %}
+      site_div: '{{ site.site_div }}'
+{% endif %}
+{% if probe.site_div is defined and probe.site_div %}
+      site_div: '{{ probe.site_div }}'
+{% endif %}
+{% if site.mm is defined and site.mm == 'true' %}
+      maintenance_mode: 'true'
+{% else %}
+{% if probe.mm is defined and probe.mm == 'true' %}
+      maintenance_mode: 'true'
+{% else %}
+      maintenance_mode: 'false'
+{% endif %}
+{% endif %}
+
+{% if probe.geohash is defined and probe.geohash %}
+      geohash: '{{ site.geohash }}'
+{% endif %}
+
+  {% set vpnip = vpn_ip[site.node][0] %}
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - target_label: __address__
+    replacement: {{ vpnip }}:9115
+  - source_labels: [site_ctry,site_rgn,site_desc,site_client,site_code]
+    regex: (.*);(.*);(.*);(.*);(.*)
+{% if site.device is defined and site.device == 'core' %}
+    replacement: 'G4${1}CE${2}{% if probe.site_div is defined and probe.site_div %}-{{ probe.site_div }}{% endif %}-${3}-${4}${5}'
+{% else %}
+    replacement: 'M4${1}MP${2}{% if probe.site_div is defined and probe.site_div %}-{{ probe.site_div }}{% endif %}-${3}-${4}${5}'
+{% endif %}
+    target_label: device_name  
+  - source_labels: [instance]
+    regex: .*-(1|2|3|4|5|6):\d+
+    replacement: '${1}'
+    target_label: tunnel 
+  - source_labels: [instance]
+    regex: .*-0:\d+
+    replacement: 'loopback'
+    target_label: tunnel 
+  - source_labels: [site_ctry,site_rgn,site_desc,site_client,site_code]
+    regex: (.*);(.*);(.*);(.*);(.*)
+    replacement: 'G4${1}CE${2}{% if site.site_div is defined and site.site_div %}-{{ site.site_div }}{% endif %}{% if probe.site_div is defined and probe.site_div %}-{{ probe.site_div }}{% endif %}-${3}-${4}${5}'
+    target_label: device_ce  
+  - source_labels: [__param_module]
+    target_label: type 
+  - source_labels: [site_client,site_code]
+    regex: (.*);(.*)
+    replacement: '${1}${2}'
+    target_label: site_code 
+{% else %}
+    labels:
+      device: 'sm'
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - target_label: __address__
+    replacement: {{ vpnip }}:9115
+
+{% endif %}  
+{% endif %}
+
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endfor %}
+
+{% set snmp = salt['pillar.get']('snmp') %}
+{% for snmp in snmp %}
+- job_name: {{ snmp.job_name }}
+  metrics_path: /snmp
+  params:
+    module:
+    - {{ snmp.module }}
+{% if snmp.scrape_interval is defined and snmp.scrape_interval %}
+  scrape_interval: {{ snmp.scrape_interval }}s
+{% endif %}
+{% if snmp.scrape_timeout is defined and snmp.scrape_timeout %}
+  scrape_timeout: {{ snmp.scrape_timeout }}s
+{% endif %}
+  static_configs:
+  - targets:
+{% for value in snmp.targets %}
+    - {{ value }}
+{% endfor %}
+{% if site.site_name is defined and site.site_name %}
+    labels:
+      site_name: '{{ site.site_name }}'
+      site_code: '{{ site.site_code }}'
+      site_ctry: '{{ site.site_ctry }}'
+      site_rgn: '{{ site.site_rgn }}'
+      site_desc: '{{ site.site_desc }}'
+      site_client: '{{ site.site_client }}'
+{% if site.site_div is defined and site.site_div %}
+      site_div: '{{ site.site_div }}'
+{% endif %}
+{% if site.mm is defined and site.mm == 'true' %}
+      maintenance_mode: 'true'
+{% else %}
+      maintenance_mode: 'false'
+{% endif %}
+{% endif %}
+  {% set vpnip = vpn_ip[site.node][0] %}
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - target_label: __address__
+    replacement: {{ vpnip }}:9116
+{% if site.site_name is defined and site.site_name %}
+  - source_labels: [site_ctry,site_rgn,site_desc,site_client,site_code]
+    regex: (.*);(.*);(.*);(.*);(.*)
+    replacement: 'M4${1}MP${2}{% if site.site_div is defined and site.site_div %}-{{ site.site_div }}{% endif %}-${3}-${4}${5}'
+    target_label: device_name
+  - source_labels: [site_ctry,site_rgn,site_desc,site_client,site_code]
+    regex: (.*);(.*);(.*);(.*);(.*)
+    replacement: 'G4${1}CE${2}{% if site.site_div is defined and site.site_div %}-{{ site.site_div }}{% endif %}-${3}-${4}${5}'
+    target_label: device_ce        
+  - source_labels: [site_client,site_code]
+    regex: (.*);(.*)
+    replacement: '${1}${2}'
+    target_label: site_code 
+{% endif %}
+{% endfor %}
+###SITE PROBE RULES###
+
+{% set misc = salt['pillar.get']('misc') %}
+{% for object in misc %}
+- job_name: {{ object.job_name }}
+{% if object.scrape_interval is defined and object.scrape_interval %}
+  scrape_interval: {{ object.scrape_interval }}s
+{% endif %}
+{% if object.scrape_timeout is defined and object.scrape_timeout %}
+  scrape_timeout: {{ object.scrape_timeout }}s
+{% endif %}
+  static_configs:
+  - targets:
+{% for value in object.targets %}
+    - {{ value.host }}:{{ value.port }}
+{% endfor %}
+{% endfor %}
+
+
+{% for site in salt['pillar.get']('loadshedding') %}
+- job_name: {{ site.name }} loadshedding
+  scheme: https
+  tls_config:
+      insecure_skip_verify: true
+  metrics_path: /metrics
+  basic_auth:
+    username: 'loadshedding'
+    password: 'fPOC9*kl5Q!2'  
+  params:
+    area_id:
+    - '{{ site.area_id }}'
+  static_configs:
+  - targets:
+    - loadshed.splitpoint.co.za:443
+    labels:
+{% if site.site_name is defined and site.site_name %}
+      site_name: '{{ site.site_name }}'
+      site_code: '{{ site.site_code }}'
+      site_ctry: '{{ site.site_ctry }}'
+      site_rgn: '{{ site.site_rgn }}'
+      site_desc: '{{ site.site_desc }}'
+      area_id:  '{{ site.area_id }}'
+{% if site.site_div is defined and site.site_div %}
+      site_div: '{{ site.site_div }}'
+{% endif %}
+{% if site.mm is defined and site.mm == 'true' %}
+      maintenance_mode: 'true'
+{% else %}
+      maintenance_mode: 'false'
+{% endif %}
+{% if site.geohash is defined and site.geohash %}
+      geohash: '{{ site.geohash }}'
+{% endif %}
+{% endif %}
+  relabel_configs:
+  - source_labels: [site_ctry,site_rgn,site_desc,site_client,site_code]
+    regex: (.*);(.*);(.*);(.*);(.*)
+    replacement: 'G4${1}CE${2}{% if site.site_div is defined and site.site_div %}-{{ site.site_div }}{% endif %}-${3}-${4}${5}'
+    target_label: device_ce
+  - source_labels: [site_client,site_code]
+    regex: (.*);(.*)
+    replacement: '${1}${2}'
+    target_label: site_code
+  metric_relabel_configs:
+  - source_labels: [name]
+    target_label: device_name
+    action: replace
+  - source_labels: [ __name__ ]
+    target_label: __name__
+    action: replace
+
+{% endfor %}

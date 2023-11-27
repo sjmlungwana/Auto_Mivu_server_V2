@@ -1,0 +1,1 @@
+options bcm2835_wdt nowayout=1 heartbeat=10

@@ -1,0 +1,9 @@
+name,bu,count
+{% set vpn_ip = salt['mine.get']('*', 'network.ip_addrs')  or {} %}
+{%- for site in salt['pillar.get']('Nodes') -%}
+{%- if site.name == "JDG-Central" -%}
+{%- for probe in site.probes -%}
+{{probe.job_name |regex_replace('.*CP-(.*)$', '\\1')}},{{probe.job_name |regex_replace('.*-(\d+)$', '\\1$
+{% endfor %}
+{%- endif -%}
+{%- endfor -%}

@@ -1,0 +1,25 @@
+{% set name = salt['grains.get']('name') %}
+{% set client = salt['grains.get']('client') %}
+{% set interface = salt['grains.get']('tstat:interface') %}
+filebeat.inputs:
+- type: log
+  enabled: true
+  fields:
+    tstat_type: udp_complete
+    siteName: {{name}}
+    client: {{client}}
+    tenant: {{client}}
+  paths:
+  - /opt/splitpoint/tstat/var/{{interface}}/*/log_udp_complete
+  file_identity.inode_marker.path: /opt/splitpoint/tstat/var/eth0/.udp_complete_eth0-marker
+# ------------------------------ Logstash Output -------------------------------
+output.logstash:
+  enabled: true
+  hosts: ["169.254.144.1:5044"]
+  worker: 1
+  #compression_level: 3
+  loadbalance: false
+  backoff.init: 1s
+  backoff.max: 60s
+  bulk_max_size: 2048
+  timeout: 30s

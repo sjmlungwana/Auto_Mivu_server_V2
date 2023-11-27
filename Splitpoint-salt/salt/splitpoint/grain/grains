@@ -1,0 +1,16 @@
+{% set universal = salt['pillar.get']('universal') %}
+{% set samplinghosts = salt['pillar.get']('Sampling Hosts') %}
+{% set criticalhosts = salt['pillar.get']('Business Critical Hosts') %}
+{% set nodes = salt['pillar.get']('Nodes') %}
+{% set host = salt['grains.get']('id') %}
+
+{% for node in nodes if host == node.node %}
+{% if universal %}
+{{ universal|yaml(False) }}
+{% endif %}
+{{ node|yaml(False) }}
+{% endfor %}
+
+
+roles:
+- probe

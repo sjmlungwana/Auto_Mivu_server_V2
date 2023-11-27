@@ -1,0 +1,13 @@
+{% set tstat = salt['grains.get']('tstat:interface') %}
+[Unit]
+Description=Tstat Capture for {{tstat}}
+After=network.target
+Wants=network.target
+
+[Service]
+Restart=always
+ExecStartPre=/bin/mkdir --parents /opt/splitpoint/tstat/var/{{tstat}}
+ExecStart=/usr/bin/tstat -i {{tstat}} -l -s /opt/splitpoint/tstat/var/{{tstat}} -N /opt/splitpoint/tstat/etc/local-networks.conf -H /opt/splitpoint/tstat/etc/histogram.conf -T /opt/splitpoint/tstat/etc/runtime.conf
+
+[Install]
+WantedBy=multi-user.target

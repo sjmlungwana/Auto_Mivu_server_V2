@@ -1,0 +1,5 @@
+name,client,bu,count
+{% set vpn_ip = salt['mine.get']('*', 'network.ip_addrs')  or {} %}
+{%- for site in salt['pillar.get']('Nodes') -%}
+{{site.name}},{{site.client}},{{ (site.name) |regex_replace('.*-(\d+)$', '\\1')}},1
+{% endfor %}

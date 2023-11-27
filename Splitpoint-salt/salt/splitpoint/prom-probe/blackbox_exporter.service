@@ -1,0 +1,12 @@
+[Unit]
+Description=prometheus blackbox exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+LimitNOFILE=49152
+ExecStart=/usr/bin/blackbox_exporter --web.listen-address="{{ grains['ip_interfaces']['tun0'][0] }}:9115" --config.file /etc/blackbox_exporter/blackbox.yml
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

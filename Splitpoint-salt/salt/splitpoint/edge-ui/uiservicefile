@@ -1,0 +1,11 @@
+[Service]
+ExecStart=
+ExecStart=/bin/menu
+StandardInput=tty
+StandardOutput=tty
+StandardError=syslog
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+Alias=menu-ui.service

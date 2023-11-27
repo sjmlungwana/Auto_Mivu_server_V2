@@ -1,0 +1,137 @@
+###Storage###
+#remote_write:
+#  - url: "http://192.168.66.26:8086/api/v1/prom/write?db=prometheus"
+#remote_read:
+#  - url: "http://192.168.66.26:8086/api/v1/prom/read?db=prometheus"
+###Scrape###
+scrape_configs:
+
+- job_name: prometheus
+  static_configs:
+  - targets:
+    - 127.0.0.1:9090
+
+
+{% for site in salt['pillar.get']('Nodes') %}
+{% set vpn_ip = salt['mine.get'](site.node, 'network.ip_addrs')  or [] %}
+{% if vpn_ip %}
+{% if site.snmp is defined and site.snmp and vpn_ip is defined and vpn_ip|length %}
+{% for snmp in site.snmp %}
+{% if snmp.job_name is defined and snmp.job_name %}
+- job_name: {{ snmp.job_name }}
+{% else %}
+- job_name: {{ site.name }} (snmp{% if not loop.first%} {{ loop.index }}{% endif %})
+{% endif %}
+  metrics_path: /snmp
+  params:
+    module:
+    - {{ snmp.module }}
+{% if snmp.scrape_interval is defined and snmp.scrape_interval %}
+  scrape_interval: {{ snmp.scrape_interval }}s
+{% endif %}
+{% if snmp.scrape_timeout is defined and snmp.scrape_timeout %}
+  scrape_timeout: {{ snmp.scrape_timeout }}s
+{% endif %}
+  static_configs:
+  - targets:
+{% for value in snmp.targets %}
+    - {{ value }}
+{% endfor %}
+  {% set vpnip = vpn_ip[site.node][0] %}
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - target_label: __address__
+    replacement: {{ vpnip }}:9116
+{% endfor %}
+{% endif %}
+{% if site.probes is defined and site.probes and vpn_ip is defined and vpn_ip|length %}
+{% for probe in site.probes %}
+{% if probe.job_name is defined and probe.job_name %}
+- job_name: {{ probe.job_name }}
+{% else %}
+- job_name: {{ site.name }} (probe{% if not loop.first%} {{ loop.index }}{% endif %})
+{% endif %}
+  metrics_path: /probe
+  params:
+    module:
+    - {{ probe.module }}
+{% if probe.scrape_interval is defined and probe.scrape_interval %}
+  scrape_interval: {{ probe.scrape_interval }}s
+{% endif %}
+{% if probe.scrape_timeout is defined and probe.scrape_timeout %}
+  scrape_timeout: {{ probe.scrape_timeout }}s
+{% endif %}
+  static_configs:
+  - targets:
+{% for value in probe.targets or []: %}
+    - {{ value }}
+{% endfor %}
+  {% set vpnip = vpn_ip[site.node][0] %}
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - target_label: __address__
+    replacement: {{ vpnip }}:9115
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% set snmp = salt['pillar.get']('snmp') %}
+{% for snmp in snmp and vpn_ip is defined and vpn_ip|length %}
+- job_name: {{ snmp.job_name }}
+  metrics_path: /snmp
+  params:
+    module:
+    - {{ snmp.module }}
+{% if snmp.scrape_interval is defined and snmp.scrape_interval %}
+  scrape_interval: {{ snmp.scrape_interval }}s
+{% endif %}
+{% if snmp.scrape_timeout is defined and snmp.scrape_timeout %}
+  scrape_timeout: {{ snmp.scrape_timeout }}s
+{% endif %}
+  static_configs:
+  - targets:
+{% for value in snmp.targets %}
+    - {{ value }}
+{% endfor %}
+  {% set vpnip = vpn_ip[site.node][0] %}
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - target_label: __address__
+    replacement: {{ vpnip }}:9116
+{% endfor %}
+{% set probes = salt['pillar.get']('probes') %}
+{% for probe in probes %}
+- job_name: {{ probe.job_name }}
+  metrics_path: /probe
+  params:
+    module:
+    - {{ probe.module }}
+{% if probe.scrape_interval is defined and probe.scrape_interval %}
+  scrape_interval: {{ probe.scrape_interval }}s
+{% endif %}
+{% if probe.scrape_timeout is defined and probe.scrape_timeout %}
+  scrape_timeout: {{ probe.scrape_timeout }}s
+{% endif %}
+  static_configs:
+  - targets:
+{% for value in probe.targets %}
+    - {{ value }}
+{% endfor %}
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - target_label: __address__
+    replacement: {{ probe.host }}:9115
+{% endfor %}
+

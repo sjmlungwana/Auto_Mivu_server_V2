@@ -1,0 +1,80 @@
+root@NGINX-JDG:/home/david.aylward# cat /etc/nginx/sites-
+sites-available/ sites-enabled/   
+root@NGINX-JDG:/home/david.aylward# cat /etc/nginx/sites-enabled/default.conf 
+client_max_body_size 1000M;
+
+server {
+    listen 80 default_server;
+    server_name _;
+    return 301 https://$host$request_uri;
+
+}
+
+server {
+  listen 443 ssl;
+  server_name jd.t-systems.co.za;
+  ssl_certificate /var/certs/jd.crt;
+  ssl_certificate_key /var/certs/jd.key;
+        location / {                proxy_pass          http://100.103.2.12:3000;        }
+}
+server {
+  listen 443 ssl;
+  server_name admin.t-systems.co.za;
+  ssl_certificate /var/certs/jd.crt;
+  ssl_certificate_key /var/certs/jd.key;
+        location / {                proxy_pass          http://100.103.2.23:3000;        }
+
+}
+
+server {
+  listen 443 ssl;
+  server_name tssa-admin.splitpoint.net;
+  ssl_certificate /var/certs/jd.crt;
+  ssl_certificate_key /var/certs/jd.key;
+        location /jd/ {                proxy_pass          http://100.103.2.2:8080/;        }
+        location /other/ {                proxy_pass          http://100.103.2.29:8080/; }
+        location /shell/ {                proxy_pass          http://100.103.2.3:8080/; }
+}
+
+
+
+
+server {
+  listen 443 ssl;
+  server_name tssa.t-systems.co.za;
+  ssl_certificate /var/certs/tssa.crt;
+  ssl_certificate_key /var/certs/tssa.key;
+        location / {                proxy_pass          http://100.103.2.32:3000;        }
+}
+
+server {
+  listen 443 ssl;
+  server_name consol.t-systems.co.za;
+  ssl_certificate /var/certs/consol.crt;
+  ssl_certificate_key /var/certs/consol.key;
+        location / {                proxy_pass          http://100.103.2.32:3000;        }
+}
+
+server {
+  listen 443 ssl;
+  server_name truworths.t-systems.co.za;
+  ssl_certificate /var/certs/truworths.crt;
+  ssl_certificate_key /var/certs/truworths.key;
+        location / {                proxy_pass          http://100.103.2.32:3000;        }
+}
+
+server {
+  listen 443 ssl;
+  server_name poc.t-systems.co.za;
+  ssl_certificate /var/certs/poc.crt;
+  ssl_certificate_key /var/certs/poc.key;
+        location / {                proxy_pass          http://100.103.2.32:3000;        }
+}
+
+server {
+  listen 443 ssl;
+  server_name plathealth.t-systems.co.za;
+  ssl_certificate /var/certs/plathealth.crt;
+  ssl_certificate_key /var/certs/plathealth.key;
+        location / {                proxy_pass          http://100.103.2.32:3000;        }
+}

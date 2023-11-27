@@ -1,0 +1,8 @@
+[NetDev]
+Name={{rawdevice}}.{{vlanid}}
+Kind=vlan
+
+[VLAN]
+Id={{vlanid}}
+
+
